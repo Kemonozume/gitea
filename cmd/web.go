@@ -28,7 +28,7 @@ import (
 	"code.gitea.io/gitea/routers/dev"
 	"code.gitea.io/gitea/routers/org"
 	"code.gitea.io/gitea/routers/repo"
-	"code.gitea.io/gitea/routers/user"
+	"github.com/Kemonozume/gitea/routers/user"
 
 	"github.com/go-macaron/binding"
 	"github.com/go-macaron/cache"

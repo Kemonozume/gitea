@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-macaron/captcha"
 
-	"code.gitea.io/gitea/models"
+	"github.com/Kemonozume/gitea/models"
 	"code.gitea.io/gitea/modules/auth"
 	"code.gitea.io/gitea/modules/base"
 	"code.gitea.io/gitea/modules/context"

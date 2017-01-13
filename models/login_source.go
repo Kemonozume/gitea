@@ -19,9 +19,11 @@ import (
 	"github.com/go-xorm/core"
 	"github.com/go-xorm/xorm"
 
+	"code.gitea.io/gitea/models"
 	"code.gitea.io/gitea/modules/auth/ldap"
 	"code.gitea.io/gitea/modules/auth/pam"
 	"code.gitea.io/gitea/modules/log"
+	"github.com/Kemonozume/gitea/modules/custom"
 )
 
 // LoginType represents an login type.
@@ -547,51 +549,59 @@ func ExternalUserLogin(user *User, login, password string, source *LoginSource, 
 // UserSignIn validates user name and password.
 func UserSignIn(username, password string) (*User, error) {
 	var user *User
+	var email string
+
+	//check if the username ocntains the email or not
 	if strings.Contains(username, "@") {
-		user = &User{Email: strings.ToLower(strings.TrimSpace(username))}
+		email = username
+		username = strings.Split(email, "@")[0] //if we are out of index and panic the login fails
 	} else {
-		user = &User{LowerName: strings.ToLower(strings.TrimSpace(username))}
+		email = fmt.Sprintf("%v@hs-weingarten.de", username)
 	}
 
+	user = &User{Email: strings.ToLower(strings.TrimSpace(email))}
+
+	//check if user already logged in and exists
 	hasUser, err := x.Get(user)
 	if err != nil {
 		return nil, err
 	}
 
-	if hasUser {
-		switch user.LoginType {
-		case LoginNoType, LoginPlain:
-			if user.ValidatePassword(password) {
-				return user, nil
+	//if we dont have the user try logging in into the lsf page to see if the user is a valid student or not
+	//first time login (kinda)
+	if !hasUser {
+		valid, err := custom.CheckValidUser(username, password)
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return nil, ErrUserNotExist{0, username, 0}
+		} else {
+			u := &models.User{
+				Name:     username,
+				Email:    email,
+				Passwd:   password,
+				IsActive: true,
 			}
-
-			return nil, ErrUserNotExist{user.ID, user.Name, 0}
-
-		default:
-			var source LoginSource
-			hasSource, err := x.Id(user.LoginSource).Get(&source)
-			if err != nil {
+			if err := models.CreateUser(u); err != nil {
 				return nil, err
-			} else if !hasSource {
-				return nil, ErrLoginSourceNotExist{user.LoginSource}
 			}
+			log.Trace("Account created: %s", u.Name)
 
-			return ExternalUserLogin(user, user.LoginName, password, &source, false)
-		}
-	}
-
-	sources := make([]*LoginSource, 0, 3)
-	if err = x.UseBool().Find(&sources, &LoginSource{IsActived: true}); err != nil {
-		return nil, err
-	}
-
-	for _, source := range sources {
-		authUser, err := ExternalUserLogin(nil, username, password, source, true)
-		if err == nil {
-			return authUser, nil
+			// Auto-set admin for the only user.
+			if models.CountUsers() == 1 {
+				u.IsAdmin = true
+				u.IsActive = true
+				if err := models.UpdateUser(u); err != nil {
+					return nil, err
+				}
+			}
 		}
 
-		log.Warn("Failed to login '%s' via '%s': %v", username, source.Name, err)
+	}
+
+	if user.ValidatePassword(password) {
+		return user, nil
 	}
 
 	return nil, ErrUserNotExist{user.ID, user.Name, 0}
