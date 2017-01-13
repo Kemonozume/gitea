@@ -32,6 +32,10 @@ coverage.out
 /modules/public/bindata.go
 /modules/templates/bindata.go
 
+gitea.iml
+gitea.ipr
+gitea.iws
+
 *.db
 *.log
 
